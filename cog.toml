@@ -1,0 +1,17 @@
+branch_whitelist = ["main"]
+
+pre_bump_hooks = [
+  "cargo set-version {{version}}",
+  "cargo fmt --all",
+  "cargo clippy",
+  "cargo test --all-features",
+  "cargo build --release",
+]
+
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+repository = "noky"
+owner = "its-danny"
+authors = [{ signature = "Danny Tatom", username = "its-danny" }]

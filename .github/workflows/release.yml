@@ -1,0 +1,26 @@
+on: workflow_dispatch
+
+env: 
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: |
+          cargo install cargo-edit
+      - id: release
+        uses: oknozor/cocogitto-action@v3
+        with:
+          release: true
+      - run: cog changelog --at ${{ steps.release.outputs.version }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
+          tag_name: ${{ steps.release.outputs.version }}

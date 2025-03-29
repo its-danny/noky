@@ -1,0 +1,33 @@
+[package]
+name = "noky"
+version = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+dirs = "6.0"
+eyre = { workspace = true }
+figment = { version = "0.10", features = ["toml", "json", "yaml", "env"] }
+serde = { workspace = true }
+serde_json = "1.0"
+humantime = "2.1"
+noky-store = { path = "../noky-store" }
+noky-redis = { path = "../noky-redis" }
+noky-moka = { path = "../noky-moka" }
+clap = { version = "4.5", features = ["derive"] }
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1.44", features = ["full"] }
+reqwest = { version = "0.12", features = ["stream"] }
+glob = "0.3"
+base64 = "0.22"
+ring = "0.17"
+rand = { version = "0.9", features = ["std_rng"] }
+sha2 = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio-retry = "0.3"
+thiserror = "2.0"
+
+[dev-dependencies]
+bytes = "1.10"
+wiremock = "0.6"

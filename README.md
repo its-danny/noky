@@ -32,9 +32,14 @@ openssl pkey -in public.pem -pubin -outform DER | base64
 Add your client's public key to the Noky configuration:
 
 ```toml
-[services.your-service]
+[services.my-service]
+url = "http://localhost:8080"
+routes = [
+    { path = "/api/*", methods = ["GET", "POST"] },
+    { path = "/public/*", methods = ["GET"], auth = false }
+]
 keys = [
-    { id = "your-client-id", key = "YOUR_PUBLIC_KEY_B64" }
+    { id = "my-client", key = "YOUR_PUBLIC_KEY_HERE" }
 ]
 ```
 
@@ -82,18 +87,4 @@ response = http_post(
   (headers = headers),
   (body = '{"key": "value"}')
 );
-```
-
-## Example config
-
-```toml
-[services.my-service]
-url = "http://localhost:8080"
-routes = [
-    { path = "/api/*", methods = ["GET", "POST"] },
-    { path = "/public/*", methods = ["GET"], auth = false }
-]
-keys = [
-    { id = "my-client", key = "YOUR_PUBLIC_KEY_HERE" }
-]
 ```

@@ -81,6 +81,8 @@ pub async fn forward_request(State(state): State<AppState>, request: Request) ->
         .routes
         .iter()
         .find(|route| matches_pattern(&route.path, &path))
+        // Safety: We know this unwrap is safe because we already found a service with a matching route
+        // in the service_config match above. If we found a service, it must have at least one route.
         .unwrap();
 
     if let Some(methods) = &route.methods {
@@ -132,21 +134,21 @@ pub async fn forward_request(State(state): State<AppState>, request: Request) ->
     headers.remove("X-Auth-Nonce");
     headers.remove("X-Auth-Signature");
 
-    let reqwest_request = client
-        .request(
-            method.parse().unwrap(),
-            format!("{}{}", service_config.url.trim_end_matches('/'), parts.uri),
-        )
-        .headers(headers)
-        .body(body);
-
     let retry_strategy = ExponentialBackoff::from_millis(100)
         .max_delay(std::time::Duration::from_secs(2))
         .map(jitter)
         .take(3);
 
     let reqwest_response = match Retry::spawn(retry_strategy, || async {
-        reqwest_request.try_clone().unwrap().send().await
+        client
+            .request(
+                method.parse().unwrap(),
+                format!("{}{}", service_config.url.trim_end_matches('/'), parts.uri),
+            )
+            .headers(headers.clone())
+            .body(body.clone())
+            .send()
+            .await
     })
     .await
     {

@@ -23,6 +23,9 @@ pub enum NokyError {
 
     #[error("Internal Server Error: {0}")]
     InternalServerError(String),
+
+    #[error("IP Not Allowed: {0}")]
+    IpNotAllowed(String),
 }
 
 impl IntoResponse for NokyError {
@@ -34,6 +37,7 @@ impl IntoResponse for NokyError {
             NokyError::MethodNotAllowed(msg) => (StatusCode::METHOD_NOT_ALLOWED, msg),
             NokyError::BadGateway(msg) => (StatusCode::BAD_GATEWAY, msg),
             NokyError::InternalServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            NokyError::IpNotAllowed(msg) => (StatusCode::FORBIDDEN, msg),
         };
 
         (status, message).into_response()

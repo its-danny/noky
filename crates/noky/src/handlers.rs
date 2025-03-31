@@ -1,4 +1,5 @@
 use crate::{error::NokyError, AppState};
+use axum::extract::ConnectInfo;
 use axum::{
     body::{to_bytes, Body},
     extract::{Request, State},
@@ -10,6 +11,7 @@ use glob::Pattern;
 use noky_store::NonceCache;
 use ring::signature::{self, UnparsedPublicKey};
 use sha2::{Digest, Sha256};
+use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio_retry::{
     strategy::{jitter, ExponentialBackoff},
@@ -28,6 +30,13 @@ pub async fn forward_request(State(state): State<AppState>, request: Request) ->
     let path = request.uri().path().to_string();
     let method = request.method().as_str().to_string();
     let mut headers = request.headers().clone();
+
+    let remote_addr = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|addr| addr.0.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
     let (parts, body) = request.into_parts();
 
     let body = match to_bytes(body, 10 * 1024 * 1024).await {
@@ -52,6 +61,21 @@ pub async fn forward_request(State(state): State<AppState>, request: Request) ->
                 .into_response();
         }
     };
+
+    if let Some(whitelist) = &service_config.whitelist {
+        if whitelist.is_empty() {
+            return NokyError::IpNotAllowed("No IPs are allowed for this service".to_string())
+                .into_response();
+        }
+
+        if !whitelist.contains(&remote_addr) {
+            return NokyError::IpNotAllowed(format!(
+                "IP {} is not allowed for this service",
+                remote_addr
+            ))
+            .into_response();
+        }
+    }
 
     let route = service_config
         .routes
@@ -355,6 +379,7 @@ mod tests {
                         id: "test-client".to_string(),
                         key: keys.public_key.clone(),
                     }],
+                    whitelist: None,
                 },
             )]),
         }
@@ -708,5 +733,80 @@ mod tests {
         let response = forward_request(State(state), request).await;
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_ip_whitelist() {
+        let keys = create_test_keys();
+        let mut config = create_test_config(&keys);
+        config.services.get_mut("test").unwrap().whitelist = Some(vec!["127.0.0.1".to_string()]);
+        let state = AppState {
+            config,
+            cache: Cache::Moka(
+                MokaCache::new(MokaConfig {
+                    max_capacity: 1000,
+                    ttl: std::time::Duration::from_secs(3600),
+                })
+                .await
+                .unwrap(),
+            ),
+        };
+
+        let mut request = create_test_request("/public/test", Method::GET, "test", None);
+        request.extensions_mut().insert(ConnectInfo(SocketAddr::new(
+            "127.0.0.1".parse().unwrap(),
+            8080,
+        )));
+        let response = forward_request(State(state.clone()), request).await;
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+
+        let mut request = create_test_request("/public/test", Method::GET, "test", None);
+        request.extensions_mut().insert(ConnectInfo(SocketAddr::new(
+            "192.168.1.1".parse().unwrap(),
+            8080,
+        )));
+        let response = forward_request(State(state.clone()), request).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let mut config = create_test_config(&keys);
+        config.services.get_mut("test").unwrap().whitelist = Some(vec![]);
+        let state = AppState {
+            config,
+            cache: Cache::Moka(
+                MokaCache::new(MokaConfig {
+                    max_capacity: 1000,
+                    ttl: std::time::Duration::from_secs(3600),
+                })
+                .await
+                .unwrap(),
+            ),
+        };
+        let mut request = create_test_request("/public/test", Method::GET, "test", None);
+        request.extensions_mut().insert(ConnectInfo(SocketAddr::new(
+            "127.0.0.1".parse().unwrap(),
+            8080,
+        )));
+        let response = forward_request(State(state), request).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let config = create_test_config(&keys);
+        let state = AppState {
+            config,
+            cache: Cache::Moka(
+                MokaCache::new(MokaConfig {
+                    max_capacity: 1000,
+                    ttl: std::time::Duration::from_secs(3600),
+                })
+                .await
+                .unwrap(),
+            ),
+        };
+        let mut request = create_test_request("/public/test", Method::GET, "test", None);
+        request.extensions_mut().insert(ConnectInfo(SocketAddr::new(
+            "192.168.1.1".parse().unwrap(),
+            8080,
+        )));
+        let response = forward_request(State(state), request).await;
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
     }
 }

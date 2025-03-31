@@ -63,6 +63,7 @@ pub struct ServiceConfig {
     pub url: String,
     pub routes: Vec<RouteConfig>,
     pub keys: Vec<KeyConfig>,
+    pub whitelist: Option<Vec<String>>,
 }
 
 #[derive(Clone, Deserialize)]
